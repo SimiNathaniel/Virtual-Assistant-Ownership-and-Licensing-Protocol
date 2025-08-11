@@ -6,6 +6,9 @@
 (define-constant err-license-expired (err u104))
 (define-constant err-skill-not-found (err u105))
 (define-constant err-invalid-royalty (err u106))
+(define-constant err-invalid-rating (err u107))
+(define-constant err-already-rated (err u108))
+(define-constant err-not-licensed (err u109))
 
 (define-non-fungible-token virtual-assistant uint)
 
@@ -61,6 +64,24 @@
 (define-map royalty-balances
   principal
   uint
+)
+
+(define-map ratings
+  {assistant-id: uint, rater: principal}
+  {
+    score: uint,
+    review: (string-ascii 256),
+    created-at: uint
+  }
+)
+
+(define-map assistant-ratings
+  uint
+  {
+    total-score: uint,
+    total-ratings: uint,
+    average-rating: uint
+  }
 )
 
 (define-public (mint-assistant (name (string-ascii 64)) (description (string-ascii 256)) (royalty-percentage uint) (license-price uint))
@@ -250,6 +271,79 @@
   )
 )
 
+(define-public (rate-assistant (assistant-id uint) (score uint) (review (string-ascii 256)))
+  (let
+    (
+      (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
+      (existing-rating (map-get? ratings {assistant-id: assistant-id, rater: tx-sender}))
+      (current-stats (default-to {total-score: u0, total-ratings: u0, average-rating: u0} 
+                                 (map-get? assistant-ratings assistant-id)))
+      (has-license (is-some (map-get? licenses {assistant-id: assistant-id, licensee: tx-sender})))
+    )
+    (asserts! (and (>= score u1) (<= score u5)) err-invalid-rating)
+    (asserts! (is-none existing-rating) err-already-rated)
+    (asserts! has-license err-not-licensed)
+    (map-set ratings
+      {assistant-id: assistant-id, rater: tx-sender}
+      {
+        score: score,
+        review: review,
+        created-at: burn-block-height
+      }
+    )
+    (let
+      (
+        (new-total-score (+ (get total-score current-stats) score))
+        (new-total-ratings (+ (get total-ratings current-stats) u1))
+        (new-average (/ (* new-total-score u100) new-total-ratings))
+      )
+      (map-set assistant-ratings assistant-id
+        {
+          total-score: new-total-score,
+          total-ratings: new-total-ratings,
+          average-rating: new-average
+        }
+      )
+    )
+    (ok true)
+  )
+)
+
+(define-public (update-rating (assistant-id uint) (score uint) (review (string-ascii 256)))
+  (let
+    (
+      (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
+      (existing-rating (unwrap! (map-get? ratings {assistant-id: assistant-id, rater: tx-sender}) err-not-licensed))
+      (current-stats (unwrap! (map-get? assistant-ratings assistant-id) err-assistant-not-found))
+      (old-score (get score existing-rating))
+    )
+    (asserts! (and (>= score u1) (<= score u5)) err-invalid-rating)
+    (map-set ratings
+      {assistant-id: assistant-id, rater: tx-sender}
+      {
+        score: score,
+        review: review,
+        created-at: burn-block-height
+      }
+    )
+    (let
+      (
+        (new-total-score (+ (- (get total-score current-stats) old-score) score))
+        (total-ratings (get total-ratings current-stats))
+        (new-average (/ (* new-total-score u100) total-ratings))
+      )
+      (map-set assistant-ratings assistant-id
+        {
+          total-score: new-total-score,
+          total-ratings: total-ratings,
+          average-rating: new-average
+        }
+      )
+    )
+    (ok true)
+  )
+)
+
 (define-read-only (get-assistant (assistant-id uint))
   (map-get? assistants assistant-id)
 )
@@ -290,4 +384,26 @@
 
 (define-read-only (get-assistant-owner (assistant-id uint))
   (nft-get-owner? virtual-assistant assistant-id)
+)
+
+(define-read-only (get-rating (assistant-id uint) (rater principal))
+  (map-get? ratings {assistant-id: assistant-id, rater: rater})
+)
+
+(define-read-only (get-assistant-rating-stats (assistant-id uint))
+  (map-get? assistant-ratings assistant-id)
+)
+
+(define-read-only (get-average-rating (assistant-id uint))
+  (match (map-get? assistant-ratings assistant-id)
+    stats (some (get average-rating stats))
+    none
+  )
+)
+
+(define-read-only (has-minimum-rating (assistant-id uint) (minimum-rating uint))
+  (match (map-get? assistant-ratings assistant-id)
+    stats (>= (get average-rating stats) minimum-rating)
+    false
+  )
 )
