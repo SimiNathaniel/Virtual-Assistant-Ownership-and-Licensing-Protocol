@@ -15,6 +15,8 @@
 (define-data-var next-assistant-id uint u1)
 (define-data-var platform-fee-percentage uint u500)
 
+(define-data-var platform-fee-balance uint u0)
+
 (define-map assistants
   uint
   {
@@ -27,7 +29,8 @@
     skills: (list 10 uint),
     usage-count: uint,
     created-at: uint,
-    is-licensable: bool
+    is-licensable: bool,
+    is-paused: bool
   }
 )
 
@@ -70,7 +73,7 @@
   {assistant-id: uint, rater: principal}
   {
     score: uint,
-    review: (string-ascii 256),
+    review: (string-ascii 128),
     created-at: uint
   }
 )
@@ -83,6 +86,19 @@
     average-rating: uint
   }
 )
+(define-map reports
+  {assistant-id: uint, reporter: principal}
+  {
+    reason: (string-ascii 128),
+    reported-at: uint
+  }
+)
+
+(define-map assistant-reports
+  uint
+  uint
+)
+(define-map user-favorites {user: principal, assistant-id: uint} bool)
 
 (define-public (mint-assistant (name (string-ascii 64)) (description (string-ascii 256)) (royalty-percentage uint) (license-price uint))
   (let
@@ -102,7 +118,8 @@
         skills: (list),
         usage-count: u0,
         created-at: burn-block-height,
-        is-licensable: true
+        is-licensable: true,
+        is-paused: false
       }
     )
     (var-set next-assistant-id (+ assistant-id u1))
@@ -134,7 +151,9 @@
       (creator-royalty (/ (* total-cost (get royalty-percentage assistant)) u10000))
       (owner-payment (- total-cost (+ platform-fee creator-royalty)))
     )
+    (var-set platform-fee-balance (+ (var-get platform-fee-balance) platform-fee))
     (asserts! (get is-licensable assistant) err-not-authorized)
+    (asserts! (not (get is-paused assistant)) err-not-authorized)
     (try! (stx-transfer? total-cost tx-sender (as-contract tx-sender)))
     (try! (as-contract (stx-transfer? owner-payment tx-sender (get owner assistant))))
     (try! (as-contract (stx-transfer? creator-royalty tx-sender (get creator assistant))))
@@ -159,6 +178,47 @@
   )
 )
 
+(define-public (renew-license (assistant-id uint) (additional-duration-blocks uint) (additional-usage uint))
+  (let
+    (
+      (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
+      (existing-license (unwrap! (map-get? licenses {assistant-id: assistant-id, licensee: tx-sender}) err-not-authorized))
+      (license-cost (get license-price assistant))
+      (renewal-cost (* license-cost additional-duration-blocks))
+      (platform-fee (/ (* renewal-cost (var-get platform-fee-percentage)) u10000))
+      (creator-royalty (/ (* renewal-cost (get royalty-percentage assistant)) u10000))
+      (owner-payment (- renewal-cost (+ platform-fee creator-royalty)))
+      (new-expires-at (+ (get expires-at existing-license) additional-duration-blocks))
+      (new-remaining-usage (+ (get remaining-usage existing-license) additional-usage))
+      (new-paid-amount (+ (get paid-amount existing-license) renewal-cost))
+    )
+    (asserts! (get is-licensable assistant) err-not-authorized)
+    (asserts! (not (get is-paused assistant)) err-not-authorized)
+    (try! (stx-transfer? renewal-cost tx-sender (as-contract tx-sender)))
+    (try! (as-contract (stx-transfer? owner-payment tx-sender (get owner assistant))))
+    (try! (as-contract (stx-transfer? creator-royalty tx-sender (get creator assistant))))
+    (var-set platform-fee-balance (+ (var-get platform-fee-balance) platform-fee))
+    (map-set licenses
+      {assistant-id: assistant-id, licensee: tx-sender}
+      (merge existing-license
+        {
+          expires-at: new-expires-at,
+          remaining-usage: new-remaining-usage,
+          paid-amount: new-paid-amount
+        }
+      )
+    )
+    (map-set royalty-balances
+      (get creator assistant)
+      (+
+        (default-to u0 (map-get? royalty-balances (get creator assistant)))
+        creator-royalty
+      )
+    )
+    (ok true)
+  )
+)
+
 (define-public (use-assistant (assistant-id uint))
   (let
     (
@@ -167,6 +227,7 @@
     )
     (asserts! (> (get expires-at license) burn-block-height) err-license-expired)
     (asserts! (> (get remaining-usage license) u0) err-insufficient-payment)
+    (asserts! (not (get is-paused assistant)) err-not-authorized)
     (map-set licenses
       {assistant-id: assistant-id, licensee: tx-sender}
       (merge license {remaining-usage: (- (get remaining-usage license) u1)})
@@ -250,6 +311,19 @@
   )
 )
 
+(define-public (toggle-pause (assistant-id uint))
+  (let
+    (
+      (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
+    )
+    (asserts! (is-eq tx-sender (get owner assistant)) err-not-authorized)
+    (map-set assistants assistant-id
+      (merge assistant {is-paused: (not (get is-paused assistant))})
+    )
+    (ok true)
+  )
+)
+
 (define-public (withdraw-royalties)
   (let
     (
@@ -258,6 +332,19 @@
     (asserts! (> balance u0) err-insufficient-payment)
     (try! (as-contract (stx-transfer? balance tx-sender tx-sender)))
     (map-delete royalty-balances tx-sender)
+    (ok balance)
+  )
+)
+
+(define-public (withdraw-platform-fees)
+  (let
+    (
+      (balance (var-get platform-fee-balance))
+    )
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (> balance u0) err-insufficient-payment)
+    (try! (as-contract (stx-transfer? balance tx-sender tx-sender)))
+    (var-set platform-fee-balance u0)
     (ok balance)
   )
 )
@@ -271,13 +358,13 @@
   )
 )
 
-(define-public (rate-assistant (assistant-id uint) (score uint) (review (string-ascii 256)))
+(define-public (rate-assistant (assistant-id uint) (score uint) (feedback (string-ascii 128)))
   (let
     (
       (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
       (existing-rating (map-get? ratings {assistant-id: assistant-id, rater: tx-sender}))
-      (current-stats (default-to {total-score: u0, total-ratings: u0, average-rating: u0} 
-                                 (map-get? assistant-ratings assistant-id)))
+      (current-stats (default-to {total-score: u0, total-ratings: u0, average-rating: u0}
+                                  (map-get? assistant-ratings assistant-id)))
       (has-license (is-some (map-get? licenses {assistant-id: assistant-id, licensee: tx-sender})))
     )
     (asserts! (and (>= score u1) (<= score u5)) err-invalid-rating)
@@ -287,7 +374,7 @@
       {assistant-id: assistant-id, rater: tx-sender}
       {
         score: score,
-        review: review,
+        review: feedback,
         created-at: burn-block-height
       }
     )
@@ -309,37 +396,19 @@
   )
 )
 
-(define-public (update-rating (assistant-id uint) (score uint) (review (string-ascii 256)))
+(define-public (add-favorite (assistant-id uint))
   (let
     (
       (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
-      (existing-rating (unwrap! (map-get? ratings {assistant-id: assistant-id, rater: tx-sender}) err-not-licensed))
-      (current-stats (unwrap! (map-get? assistant-ratings assistant-id) err-assistant-not-found))
-      (old-score (get score existing-rating))
     )
-    (asserts! (and (>= score u1) (<= score u5)) err-invalid-rating)
-    (map-set ratings
-      {assistant-id: assistant-id, rater: tx-sender}
-      {
-        score: score,
-        review: review,
-        created-at: burn-block-height
-      }
-    )
-    (let
-      (
-        (new-total-score (+ (- (get total-score current-stats) old-score) score))
-        (total-ratings (get total-ratings current-stats))
-        (new-average (/ (* new-total-score u100) total-ratings))
-      )
-      (map-set assistant-ratings assistant-id
-        {
-          total-score: new-total-score,
-          total-ratings: total-ratings,
-          average-rating: new-average
-        }
-      )
-    )
+    (asserts! (is-some (map-get? licenses {assistant-id: assistant-id, licensee: tx-sender})) err-not-licensed)
+    (map-set user-favorites {user: tx-sender, assistant-id: assistant-id} true)
+    (ok true)
+  )
+)
+(define-public (remove-favorite (assistant-id uint))
+  (begin
+    (map-delete user-favorites {user: tx-sender, assistant-id: assistant-id})
     (ok true)
   )
 )
@@ -372,6 +441,10 @@
   (var-get platform-fee-percentage)
 )
 
+(define-read-only (get-platform-fee-balance)
+  (var-get platform-fee-balance)
+)
+
 (define-read-only (is-license-valid (assistant-id uint) (licensee principal))
   (match (map-get? licenses {assistant-id: assistant-id, licensee: licensee})
     license (and 
@@ -392,6 +465,9 @@
 
 (define-read-only (get-assistant-rating-stats (assistant-id uint))
   (map-get? assistant-ratings assistant-id)
+)
+(define-read-only (is-favorite (user principal) (assistant-id uint))
+  (is-some (map-get? user-favorites {user: user, assistant-id: assistant-id}))
 )
 
 (define-read-only (get-average-rating (assistant-id uint))

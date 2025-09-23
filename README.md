@@ -1,4 +1,4 @@
-> Tokenize, license, and monetize virtual assistants on the blockchain! 💎
+Tokenize, license, and monetize virtual assistants on the blockchain! 💎
 
 ## 🌟 Overview
 
@@ -9,8 +9,10 @@ The Virtual Assistant Ownership and Licensing Protocol enables users to mint NFT
 - 🎨 **NFT Avatars**: Mint unique virtual assistants as NFTs
 - 📜 **On-chain Licensing**: Smart contract-based licensing with automated royalties
 - 💰 **Royalty Streams**: Creators earn from every license purchase and usage
-- 🛒 **Skill Marketplace**: Buy and install skills to enhance assistants
+- 💰 **Platform Fees**: Automatic collection and withdrawal of platform fees
+- � **Skill Marketplace**: Buy and install skills to enhance assistants
 - ⚙️ **Customizable Settings**: Control licensing terms and pricing
+- ❤️ **User Favorites**: Mark assistants as favorites for quick access
 
 ## 🚀 Quick Start
 
@@ -104,6 +106,17 @@ clarinet console
 **Toggle licensing availability:**
 ```clarity
 (contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol toggle-licensable u1)
+### ❤️ User Favorites
+
+**Add assistant to favorites:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol add-favorite u1)
+```
+
+**Remove assistant from favorites:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol remove-favorite u1)
+```
 ```
 
 ## 🔍 Query Functions
@@ -120,6 +133,12 @@ clarinet console
 )
 ```
 
+### ❤️ Check Favorite Status
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol is-favorite 
+  'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7 u1
+)
+```
 ### ✅ Validate License
 ```clarity
 (contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol is-license-valid 
@@ -131,7 +150,11 @@ clarinet console
 ```clarity
 (contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol get-royalty-balance 
   'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7
+- **User Favorites**: Personal lists of favorite assistants
 )
+### 👤 For Users
+- Curate personal favorite assistants for quick access
+- Build collections of preferred AI tools
 ```
 
 ## 🏗️ Architecture
@@ -196,3 +219,45 @@ MIT License - see LICENSE file for details
 ---
 
 Built with ❤️ for the decentralized AI future! 🚀
+
+## 🔄 License Renewal Feature
+
+### Overview
+The License Renewal feature allows existing licensees to extend their license duration and usage limits without purchasing a new license from scratch. This enhances user experience by providing seamless continuity for virtual assistant usage.
+
+### Key Benefits
+- 🔄 **Seamless Extension**: Extend licenses without interruption
+- 💰 **Flexible Payments**: Pay only for additional duration and usage
+- 📈 **Royalty Continuity**: Maintains creator and owner revenue streams
+- ⚡ **Efficient Management**: Update existing licenses instead of creating new ones
+
+### Usage
+**Renew an existing license:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol renew-license
+  u1     ;; assistant ID
+  u500   ;; additional duration blocks
+  u25    ;; additional usage limit
+)
+```
+
+### Technical Details
+- Requires an existing valid license for the caller
+- Calculates renewal cost based on current license price per block
+- Distributes payments to owner, creator, and platform proportionally
+- Updates license expiration and usage limits additively
+- Maintains all existing license benefits and access rights
+
+### Integration Points
+- Works seamlessly with existing licensing system
+- Compatible with all assistant management features
+- Supports royalty withdrawal and platform fee collection
+- No conflicts with favorites, ratings, or skill installations
+
+### Business Impact
+- 📈 **Increased Retention**: Reduces license churn through easy renewals
+- 💡 **Better UX**: Eliminates friction in license management
+- 💰 **Revenue Optimization**: Encourages longer-term commitments
+- 🌟 **Competitive Advantage**: Differentiates from one-time license models
+
+#VirtualAssistant #LicenseRenewal #BlockchainAI #DecentralizedTech
