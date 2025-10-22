@@ -117,6 +117,16 @@ clarinet console
 ```clarity
 (contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol remove-favorite u1)
 ```
+
+### 🔄 License Transfer
+
+**Transfer license to another user:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol transfer-license
+  u1 ;; assistant ID
+  'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7 ;; new licensee
+)
+```
 ```
 
 ## 🔍 Query Functions

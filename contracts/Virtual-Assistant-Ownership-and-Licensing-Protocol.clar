@@ -239,6 +239,17 @@
   )
 )
 
+(define-public (transfer-license (assistant-id uint) (new-licensee principal))
+  (let
+    (
+      (current-license (unwrap! (map-get? licenses {assistant-id: assistant-id, licensee: tx-sender}) err-not-authorized))
+    )
+    (map-delete licenses {assistant-id: assistant-id, licensee: tx-sender})
+    (map-set licenses {assistant-id: assistant-id, licensee: new-licensee} current-license)
+    (ok true)
+  )
+)
+
 (define-public (create-skill (name (string-ascii 32)) (description (string-ascii 128)) (price uint))
   (let
     (
