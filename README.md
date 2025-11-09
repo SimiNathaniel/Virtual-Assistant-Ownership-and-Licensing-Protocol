@@ -271,3 +271,56 @@ The License Renewal feature allows existing licensees to extend their license du
 - 🌟 **Competitive Advantage**: Differentiates from one-time license models
 
 #VirtualAssistant #LicenseRenewal #BlockchainAI #DecentralizedTech
+
+## 🚨 Assistant Reporting Feature
+
+### Overview
+The Assistant Reporting feature empowers users to flag inappropriate or problematic virtual assistants, fostering a safer and more trustworthy decentralized AI ecosystem. This community-driven moderation tool helps maintain quality standards across the platform.
+
+### Key Benefits
+- 🚨 **Community Moderation**: Users can report harmful or inappropriate content
+- 📊 **Transparency Dashboard**: Public visibility of report counts for informed decision-making
+- 🛡️ **Quality Assurance**: Helps identify and address problematic assistants
+- ⚖️ **Fair Governance**: Prevents abuse while allowing legitimate reporting
+
+### Usage
+**Report an assistant:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol report-assistant
+  u1     ;; assistant ID
+  "Inappropriate content" ;; reason for reporting
+)
+```
+
+### Technical Details
+- One report per user per assistant to prevent spam
+- Stores detailed reason and timestamp for transparency
+- Aggregates report counts for easy monitoring
+- Integrates seamlessly with existing rating and licensing systems
+
+### Integration Points
+- Compatible with all existing features (licensing, ratings, favorites)
+- No impact on assistant functionality or ownership
+- Supports platform governance and moderation workflows
+- Enables data-driven decisions for assistant management
+
+### Business Impact
+- 🛡️ **Enhanced Trust**: Builds user confidence in the platform
+- 📈 **Quality Improvement**: Drives continuous improvement of assistant offerings
+- 🌐 **Community Building**: Strengthens the decentralized AI community
+- ⚡ **Proactive Moderation**: Early identification of potential issues
+
+### Query Functions
+**Check report count:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol get-report-count u1)
+```
+
+**Get specific report:**
+```clarity
+(contract-call? .Virtual-Assistant-Ownership-and-Licensing-Protocol get-report
+  u1 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7
+)
+```
+
+#VirtualAssistant #AssistantReporting #CommunityModeration #DecentralizedAI #BlockchainSafety

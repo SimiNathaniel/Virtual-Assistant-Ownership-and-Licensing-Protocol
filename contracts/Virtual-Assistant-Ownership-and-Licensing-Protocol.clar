@@ -9,6 +9,7 @@
 (define-constant err-invalid-rating (err u107))
 (define-constant err-already-rated (err u108))
 (define-constant err-not-licensed (err u109))
+(define-constant err-already-reported (err u110))
 
 (define-non-fungible-token virtual-assistant uint)
 
@@ -97,6 +98,26 @@
 (define-map assistant-reports
   uint
   uint
+)
+
+(define-public (report-assistant (assistant-id uint) (reason (string-ascii 128)))
+  (let
+    (
+      (existing-report (map-get? reports {assistant-id: assistant-id, reporter: tx-sender}))
+    )
+    (asserts! (is-none existing-report) err-already-reported)
+    (map-set reports
+      {assistant-id: assistant-id, reporter: tx-sender}
+      {
+        reason: reason,
+        reported-at: burn-block-height
+      }
+    )
+    (map-set assistant-reports assistant-id
+      (+ (default-to u0 (map-get? assistant-reports assistant-id)) u1)
+    )
+    (ok true)
+  )
 )
 (define-map user-favorites {user: principal, assistant-id: uint} bool)
 
@@ -493,4 +514,12 @@
     stats (>= (get average-rating stats) minimum-rating)
     false
   )
+)
+
+(define-read-only (get-report-count (assistant-id uint))
+  (default-to u0 (map-get? assistant-reports assistant-id))
+)
+
+(define-read-only (get-report (assistant-id uint) (reporter principal))
+  (map-get? reports {assistant-id: assistant-id, reporter: reporter})
 )
