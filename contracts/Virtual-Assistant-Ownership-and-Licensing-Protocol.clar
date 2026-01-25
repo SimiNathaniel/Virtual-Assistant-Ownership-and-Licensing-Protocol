@@ -19,21 +19,22 @@
 (define-data-var platform-fee-balance uint u0)
 
 (define-map assistants
-  uint
-  {
-    name: (string-ascii 64),
-    description: (string-ascii 256),
-    owner: principal,
-    creator: principal,
-    royalty-percentage: uint,
-    license-price: uint,
-    skills: (list 10 uint),
-    usage-count: uint,
-    created-at: uint,
-    is-licensable: bool,
-    is-paused: bool
-  }
-)
+   uint
+   {
+     name: (string-ascii 64),
+     description: (string-ascii 256),
+     owner: principal,
+     creator: principal,
+     royalty-percentage: uint,
+     license-price: uint,
+     skills: (list 10 uint),
+     usage-count: uint,
+     created-at: uint,
+     is-licensable: bool,
+     is-paused: bool,
+     category: (string-ascii 32)
+   }
+ )
 
 (define-map licenses
   {assistant-id: uint, licensee: principal}
@@ -140,7 +141,8 @@
         usage-count: u0,
         created-at: burn-block-height,
         is-licensable: true,
-        is-paused: false
+        is-paused: false,
+        category: ""
       }
     )
     (var-set next-assistant-id (+ assistant-id u1))
@@ -344,17 +346,30 @@
 )
 
 (define-public (toggle-pause (assistant-id uint))
-  (let
-    (
-      (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
-    )
-    (asserts! (is-eq tx-sender (get owner assistant)) err-not-authorized)
-    (map-set assistants assistant-id
-      (merge assistant {is-paused: (not (get is-paused assistant))})
-    )
-    (ok true)
-  )
-)
+   (let
+     (
+       (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
+     )
+     (asserts! (is-eq tx-sender (get owner assistant)) err-not-authorized)
+     (map-set assistants assistant-id
+       (merge assistant {is-paused: (not (get is-paused assistant))})
+     )
+     (ok true)
+   )
+ )
+
+(define-public (set-assistant-category (assistant-id uint) (category (string-ascii 32)))
+   (let
+     (
+       (assistant (unwrap! (map-get? assistants assistant-id) err-assistant-not-found))
+     )
+     (asserts! (is-eq tx-sender (get owner assistant)) err-not-authorized)
+     (map-set assistants assistant-id
+       (merge assistant {category: category})
+     )
+     (ok true)
+   )
+ )
 
 (define-public (withdraw-royalties)
   (let
@@ -521,5 +536,12 @@
 )
 
 (define-read-only (get-report (assistant-id uint) (reporter principal))
-  (map-get? reports {assistant-id: assistant-id, reporter: reporter})
-)
+   (map-get? reports {assistant-id: assistant-id, reporter: reporter})
+ )
+
+(define-read-only (get-assistant-category (assistant-id uint))
+   (match (map-get? assistants assistant-id)
+     assistant (some (get category assistant))
+     none
+   )
+ )
